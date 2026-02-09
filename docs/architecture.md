@@ -31,7 +31,7 @@
 |       +          |        |  Route: 192.168.x  |        |       |          |
 |  Termius App     |        |  -> tunnel         |        |       v          |
 |  SSH to          |<-------+                   |<-------+  SSH localhost:22 |
-|  192.168.1.216   |  WARP  |                   |  QUIC  |                  |
+|  192.168.1.x   |  WARP  |                   |  QUIC  |                  |
 +------------------+        +-------------------+        +------------------+
 ```
 
@@ -48,7 +48,7 @@
 |   iPhone         | WireGd |  Tailscale DERP   | WireGd |    Your Mac      |
 |                  +------->+  Coordination     +------->+                  |
 |  Tailscale App   |        |  Server           |        |  Tailscale App   |
-|       +          |        |  (or direct P2P)  |        |  100.113.182.107 |
+|       +          |        |  (or direct P2P)  |        |  100.x.x.x |
 |  Termius App     |        |                   |        |       |          |
 |  SSH to          |<-------+                   |<-------+       v          |
 |  100.x.x.x      |        |                   |        |  SSH localhost:22 |
@@ -67,9 +67,9 @@
 +------------------+                                     +------------------+
 |   iPhone         |          Local Network (WiFi)       |    Your Mac      |
 |                  +------------------------------------>+                  |
-|  Termius App     |          192.168.1.x/24             |  192.168.1.216   |
+|  Termius App     |          192.168.1.x/24             |  192.168.1.x   |
 |  SSH to          |<------------------------------------+       |          |
-|  192.168.1.216   |                                     |       v          |
+|  192.168.1.x   |                                     |       v          |
 |                  |                                     |  SSH localhost:22 |
 +------------------+                                     +------------------+
 ```
@@ -78,15 +78,72 @@
 - No tunnel or VPN needed
 - Fastest connection (no overhead)
 
+## Method 5: SSH ProxyJump (Multi-Hop via Jump Host)
+
+```
++------------------+        +-------------------+        +------------------+
+|   You            | WireGd |  Mac Studio       |  LAN   |    Mac Mini      |
+|   (anywhere)     +------->+  (Jump Host)      +------->+    (Target)      |
+|                  |        |                   |        |                  |
+|  Termius /       |Tailscl |  Tailscale        | mDNS   |  No Tailscale    |
+|  Terminal        |  VPN   |  100.x.x.x       | .local |  192.168.1.x     |
+|                  |        |       |           |        |       |          |
+|  ssh mac-mini    |<-------+       v           |<-------+       v          |
+|  (one command)   |        |  ProxyJump auto   |        |  SSH localhost:22 |
++------------------+        +-------------------+        +------------------+
+```
+
+- Uses SSH `ProxyJump` for seamless multi-hop
+- Jump host must have Tailscale (or other external access)
+- Target machine only needs SSH enabled + LAN connectivity
+- One command: `ssh mac-mini` (SSH handles the hop)
+- Works even if the target has no VPN/tunnel installed
+- macOS Bonjour (`.local`) eliminates need to remember IPs
+
+## Method 6: Mobile + AI Remote Workflow
+
+```
++------------------+        +-------------------+        +------------------+
+|   Phone          |  SSH   |  Remote Machine   |  AI    |    Service       |
+|                  +------->+                   +------->+                  |
+|  Typeless        | via    |  Claude Code      | cmds   |  FastAPI /       |
+|  (voice input)   | Termius|  (AI agent)       |        |  any service     |
+|       |          |        |       |           |        |       |          |
+|       v          |        |       v           |        |       v          |
+|  "fix the api"   |        |  check logs       |        |  service restart |
+|                  |        |  find error        |        |  verified OK     |
+|                  |<-------+  restart service  |<-------+                  |
++------------------+        +-------------------+        +------------------+
+```
+
+- Voice input (Typeless) → text command to Claude Code
+- Claude Code autonomously debugs and fixes issues
+- No typing on tiny phone keyboards
+- Full workflow: alert → SSH → AI → fixed → back to sleep
+
 ## Comparison
 
-| Feature | Browser SSH | WARP+Termius | Tailscale | Direct WiFi |
-|---------|-----------|--------------|-----------|-------------|
-| Works on cellular | Yes | Yes | Yes | No |
-| Native SSH client | No | Yes | Yes | Yes |
-| Setup complexity | Medium | High | Low | None |
-| Extra apps needed | None | 2 (1.1.1.1 + Termius) | 2 (Tailscale + Termius) | 1 (Termius) |
-| Auth layer | Cloudflare Access OTP | WARP Zero Trust | Tailscale account | None |
-| Connection speed | Medium | Medium | Fast | Fastest |
-| iOS VPN slot | No | Yes | Yes | No |
-| File transfer | No | Yes (SCP/SFTP) | Yes (SCP/SFTP) | Yes (SCP/SFTP) |
+| Feature | Browser SSH | WARP+Termius | Tailscale | ProxyJump | Direct WiFi |
+|---------|-----------|--------------|-----------|-----------|-------------|
+| Works on cellular | Yes | Yes | Yes | Yes (via jump host) | No |
+| Native SSH client | No | Yes | Yes | Yes | Yes |
+| Setup complexity | Medium | High | Low | Low | None |
+| Extra apps needed | None | 2 (1.1.1.1 + Termius) | 2 (Tailscale + Termius) | 1 (Termius) | 1 (Termius) |
+| Auth layer | Cloudflare Access OTP | WARP Zero Trust | Tailscale account | SSH keys | None |
+| Connection speed | Medium | Medium | Fast | Fast | Fastest |
+| iOS VPN slot | No | Yes | Yes | No (uses jump host's) | No |
+| File transfer | No | Yes (SCP/SFTP) | Yes (SCP/SFTP) | Yes (SCP/SFTP) | Yes (SCP/SFTP) |
+| Reaches machines without VPN | No | No | No | Yes | N/A |
+| Session persistence (tmux) | Manual | Manual | Manual | Manual | Manual |
+
+## Resilience Layers
+
+The methods above handle **connectivity**. These additional layers handle **reliability**:
+
+| Layer | Purpose | Setup |
+|-------|---------|-------|
+| **tmux** | Process survives SSH drops | `tmux new -s <name>` before starting services |
+| **Auto-tmux** | Never forget to start tmux | Add snippet to `~/.zshrc` (see [tmux guide](tmux-guide.md)) |
+| **Launcher scripts** | One-click service recovery | `~/start-service.sh` (see [tmux guide](tmux-guide.md)) |
+| **Claude Code** | AI-assisted debugging from phone | `claude --dangerously-skip-permissions` |
+| **Address book** | Never lose a hostname/IP | Keep a table in your notes app |

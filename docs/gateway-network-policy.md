@@ -10,7 +10,7 @@ When using WARP + Termius (Method 2), you may need a Gateway Network policy to e
    - **Name:** `Allow Mac SSH`
    - **Selector:** `Destination IP`
    - **Operator:** `in`
-   - **Value:** `192.168.1.216/32` (your Mac's IP)
+   - **Value:** `YOUR_MAC_IP/32` (your Mac's IP)
    - **Action:** `Allow`
 4. Save
 
@@ -22,7 +22,7 @@ By default, Cloudflare Gateway may not have an explicit policy for private netwo
 
 After creating the policy, check if traffic appears in:
 - **Traffic policies > Gateway activity logs > Network** tab
-- Filter by destination IP `192.168.1.216`
+- Filter by destination IP `YOUR_MAC_IP`
 
 If you see entries with Action: `Allow`, the policy is working.
 If you see no entries at all, the WARP client is not sending traffic through Gateway (check `is_gateway` status).

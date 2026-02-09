@@ -1,316 +1,273 @@
-# Remote SSH to Mac via Cloudflare Tunnel & Tailscale
+# Homeserver SSH Anywhere
 
-Four ways to SSH into your Mac from anywhere — from a browser terminal to native SSH clients on your phone.
+> SSH into your home server from anywhere -- your phone, a hotel bed, or a coffee shop -- without exposing a single port to the internet.
 
-> New Year New Project #6 | Built on Mac Mini M4 | [Architecture Diagrams](docs/architecture.md) | [Config Examples](docs/config-examples/)
+5 connection methods + resilience layers (tmux, ProxyJump, mobile AI). From "same WiFi only" to "fix my server from a hotel bed with voice commands."
 
-## Connection Methods Overview
-
-| Method | App | Network | Setup Complexity |
-|--------|-----|---------|-----------------|
-| Cloudflare Browser SSH | Any browser | Any | Medium |
-| Cloudflare WARP + Termius | Termius + 1.1.1.1 | Any (cellular/WiFi) | High |
-| Tailscale + Termius | Termius + Tailscale | Any (cellular/WiFi) | Low |
-| Direct WiFi | Termius | Home WiFi only | None |
-
-## Prerequisites
-
-- A Mac with SSH (Remote Login) enabled via **System Settings > General > Sharing > Remote Login**
-- A domain managed by Cloudflare (e.g., `yourdomain.com`)
-- A free Cloudflare Zero Trust account
+> *[Why this guide exists](docs/real-world-story.md): a service crashed during vacation. The rescue happened entirely from a phone.*
 
 ---
 
-## Part 1: Cloudflare Tunnel Setup (Required for Methods 1 & 2)
+## TL;DR -- Pick Your Method
 
-### Step 1: Install cloudflared
+| # | Method | Setup Time | Works Outside Home? | Best For |
+|---|--------|-----------|-------------------|----------|
+| 1 | [WiFi Direct](#method-1-direct-wifi) | 2 min | No | Home network only |
+| 2 | [Cloudflare Browser SSH](#method-2-cloudflare-browser-ssh) | 30 min | Yes | Zero-install browser access |
+| 3 | [Cloudflare WARP](#method-3-cloudflare-warp--termius) | 60 min | Yes | Full Zero Trust with native SSH |
+| 4 | [Tailscale](#method-4-tailscale--termius) | 5 min | Yes | Simplest remote SSH |
+| 5 | [SSH ProxyJump](#method-5-ssh-proxyjump) | 10 min | Yes (via jump host) | Reaching machines without VPN |
+
+**Just want it working fast?** Start with [Method 4 (Tailscale)](#method-4-tailscale--termius).
+**Want Zero Trust security?** Go with [Method 2](#method-2-cloudflare-browser-ssh) or [Method 3](#method-3-cloudflare-warp--termius).
+
+---
+
+## Method 1: Direct WiFi
+
+```
++------------------+          same WiFi           +------------------+
+|   iPhone         +----------------------------->+    Your Mac      |
+|   Termius        |       192.168.1.x:22         |   SSH enabled    |
+|                  +<-----------------------------+                  |
++------------------+                              +------------------+
+```
+
+Same network, direct SSH. The baseline -- useless once you leave home.
 
 ```bash
-brew install cloudflared
+bash scripts/01-setup-mac-ssh.sh
 ```
 
-### Step 2: Authenticate cloudflared
+> [Full setup guide](docs/method-1-wifi-direct.md)
+
+---
+
+## Method 2: Cloudflare Browser SSH
+
+```
++------------------+        +-------------------+        +------------------+
+|   Any Device     |  HTTPS |  Cloudflare Edge  |  QUIC  |    Your Mac      |
+|                  +------->+                   +------->+                  |
+|  Any browser     |        |  Zero Trust Auth  |        |  cloudflared     |
+|                  |        |  Email OTP        |        |  (tunnel daemon) |
+|                  |<-------+  Browser Terminal  |<-------+       |          |
+|  Terminal in     |  HTTPS |                   |  QUIC  |       v          |
+|  browser         |        |                   |        |  SSH localhost:22 |
++------------------+        +-------------------+        +------------------+
+```
+
+Open a URL, verify your email, get a terminal. **Zero apps needed.** Your Mac connects outbound only -- nothing exposed.
 
 ```bash
-cloudflared login
+bash scripts/02-setup-cloudflared.sh
+bash scripts/02b-configure-zero-trust.sh
 ```
 
-This opens a browser to authorize cloudflared with your Cloudflare account. Select your domain.
+> [Full setup guide](docs/method-2-cloudflare-browser-ssh.md)
 
-### Step 3: Create a Tunnel
+---
+
+## Method 3: Cloudflare WARP + Termius
+
+```
++------------------+        +-------------------+        +------------------+
+|   iPhone         |  WARP  |  Cloudflare Edge  |  QUIC  |    Your Mac      |
+|                  +------->+                   +------->+                  |
+|  1.1.1.1 app     |  VPN   |  Gateway Proxy    |        |  cloudflared     |
+|  (Zero Trust)    | tunnel |  Split Tunnel     |        |  (warp-routing)  |
+|       +          |        |  192.168.x → tun  |        |       |          |
+|  Termius         |<-------+                   |<-------+       v          |
+|  SSH 192.168.1.x |  WARP  |                   |  QUIC  |  SSH localhost:22 |
++------------------+        +-------------------+        +------------------+
+```
+
+Native SSH from your phone over cellular. Full Zero Trust. **Hardest to set up** but the most secure.
 
 ```bash
-cloudflared tunnel create mac-remote
+bash scripts/02b-configure-zero-trust.sh
 ```
 
-This generates a tunnel ID and credentials file in `~/.cloudflared/`.
+> [Full setup guide](docs/method-3-cloudflare-warp.md) -- the critical steps most people miss are documented here.
 
-### Step 4: Configure the Tunnel
+---
 
-Create `~/.cloudflared/config.yml`:
+## Method 4: Tailscale + Termius
 
-```yaml
-tunnel: <YOUR_TUNNEL_ID>
-credentials-file: /Users/<YOUR_USERNAME>/.cloudflared/<YOUR_TUNNEL_ID>.json
-
-warp-routing:
-  enabled: true
-
-ingress:
-  - hostname: ssh.yourdomain.com
-    service: ssh://localhost:22
-  - service: http_status:404
+```
++------------------+        +-------------------+        +------------------+
+|   iPhone         | WireGd |  Tailscale DERP   | WireGd |    Your Mac      |
+|                  +------->+  (coordination)   +------->+                  |
+|  Tailscale app   |        |  or direct P2P    |        |  Tailscale app   |
+|       +          |        |                   |        |  100.x.x.x      |
+|  Termius         |<-------+                   |<-------+       |          |
+|  SSH 100.x.x.x  |        |                   |        |       v          |
+|                  |        |                   |        |  SSH localhost:22 |
++------------------+        +-------------------+        +------------------+
 ```
 
-> **Important:** `warp-routing: enabled` is required for WARP + Termius (Method 2).
-
-### Step 5: Add DNS Route
+Install on both devices, sign in, SSH to a `100.x.x.x` IP. **Done in 5 minutes.** WireGuard-encrypted.
 
 ```bash
-cloudflared tunnel route dns mac-remote ssh.yourdomain.com
+bash scripts/03-setup-tailscale.sh
 ```
 
-### Step 6: Add Private Network Route (for WARP + Termius)
+> [Full setup guide](docs/method-4-tailscale.md)
+
+---
+
+## Method 5: SSH ProxyJump
+
+```
++------------------+        +-------------------+        +------------------+
+|   You            | WireGd |  Mac Studio       |  LAN   |    Mac Mini      |
+|   (anywhere)     +------->+  (Jump Host)      +------->+    (Target)      |
+|                  |        |                   |        |                  |
+|  Termius /       |Tailscl |  Tailscale        | mDNS   |  No Tailscale    |
+|  Terminal        |  VPN   |  100.x.x.x       | .local |  192.168.1.x     |
+|                  |        |       |           |        |       |          |
+|  ssh mac-mini    |<-------+       v           |<-------+       v          |
+|  (one command)   |        |  ProxyJump auto   |        |  SSH localhost:22 |
++------------------+        +-------------------+        +------------------+
+```
+
+**Can't install VPN on every machine?** Hop through one that has it. One command, SSH handles the jump automatically.
 
 ```bash
-cloudflared tunnel route ip add <YOUR_MAC_IP>/32 mac-remote
+bash scripts/06-setup-ssh-config.sh
 ```
 
-### Step 7: Install as a System Service
+```ssh-config
+# ~/.ssh/config
+Host mac-studio
+    HostName mac-studio          # Tailscale hostname
+    User youruser
 
-Create `/Library/LaunchDaemons/com.cloudflare.cloudflared.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-  <dict>
-    <key>Label</key>
-    <string>com.cloudflare.cloudflared</string>
-    <key>ProgramArguments</key>
-    <array>
-      <string>/opt/homebrew/bin/cloudflared</string>
-      <string>--config</string>
-      <string>/Users/YOUR_USERNAME/.cloudflared/config.yml</string>
-      <string>tunnel</string>
-      <string>run</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Library/Logs/com.cloudflare.cloudflared.out.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Library/Logs/com.cloudflare.cloudflared.err.log</string>
-    <key>KeepAlive</key>
-    <dict>
-      <key>SuccessfulExit</key>
-      <false/>
-    </dict>
-  </dict>
-</plist>
+Host mac-mini
+    HostName mac-mini.local      # Bonjour/mDNS
+    User youruser
+    ProxyJump mac-studio         # Auto-hop
 ```
-
-Load the service:
 
 ```bash
-sudo launchctl load /Library/LaunchDaemons/com.cloudflare.cloudflared.plist
+ssh mac-mini    # That's it. SSH jumps through mac-studio automatically.
+```
+
+> [Full setup guide](docs/ssh-config-proxyjump.md)
+
+---
+
+## Resilience: Keep Services Alive
+
+Connection methods get you in. These layers keep things **running**.
+
+### tmux -- Process Insurance
+
+```
+SSH connects → tmux → start service → SSH drops → service KEEPS RUNNING
+                                                          ↓
+                                        SSH reconnects → tmux attach → back in action
+```
+
+```bash
+bash scripts/05-setup-tmux-session.sh    # Install tmux + create launcher scripts
+```
+
+> [Full tmux guide](docs/tmux-guide.md) -- includes auto-tmux, launcher scripts, cheat sheet.
+
+### Mobile + AI -- Fix Servers From Your Phone
+
+```
++------------------+        +-------------------+        +------------------+
+|   Phone          |  SSH   |  Remote Machine   |  AI    |    Service       |
+|                  +------->+                   +------->+                  |
+|  Voice input     | via    |  Claude Code      | cmds   |  FastAPI /       |
+|  (Typeless)      | Termius|  (AI agent)       |        |  any service     |
+|       |          |        |       |           |        |       |          |
+|       v          |        |       v           |        |       v          |
+|  "fix the api"   |        |  reads logs       |        |  service restart |
+|                  |<-------+  finds error      |<-------+  verified OK     |
++------------------+        +-------------------+        +------------------+
+```
+
+SSH from phone, let AI debug and fix. No typing on tiny keyboards.
+
+> [Full mobile AI workflow](docs/mobile-ai-workflow.md)
+
+---
+
+## Comparison
+
+| Feature | WiFi Direct | Browser SSH | WARP | Tailscale | ProxyJump |
+|---------|:-----------:|:-----------:|:----:|:---------:|:---------:|
+| Works outside home | | Yes | Yes | Yes | Yes |
+| Native SSH client | Yes | | Yes | Yes | Yes |
+| No app install needed | | Yes | | | |
+| Zero Trust auth | | Yes | Yes | | |
+| File transfer (SCP) | Yes | | Yes | Yes | Yes |
+| Reaches machines w/o VPN | | | | | Yes |
+| Setup complexity | None | Medium | High | Low | Low |
+
+> **iOS note:** Tailscale and WARP both use the VPN slot. You can only use one at a time.
+
+---
+
+## Verification
+
+```bash
+bash scripts/04-verify-connection.sh    # Checks all methods
 ```
 
 ---
 
-## Method 1: Cloudflare Browser SSH (No App Needed)
+## Screenshots
 
-Access your Mac terminal from any browser. No client software required.
+| WiFi Direct | Cloudflare WARP over 5G | Tailscale |
+|:---:|:---:|:---:|
+| ![WiFi](resources/01-wifi-direct-ssh.jpeg) | ![WARP](resources/02-cellular-5g-warp-ssh.jpeg) | ![Tailscale](resources/03-tailscale-ssh.jpeg) |
 
-### Configure Cloudflare Access
-
-1. Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com)
-2. Navigate to **Settings > Authentication > Login methods** and enable **One-time PIN**
-3. Go to **Access controls > Applications > Add an application > Self-hosted**
-4. Configure:
-   - **Application name:** `Mac SSH`
-   - **Session Duration:** `1 month`
-   - **Public hostname:** subdomain `ssh`, domain `yourdomain.com`
-   - **Browser rendering:** `SSH` (critical!)
-5. Add a policy:
-   - **Policy name:** `Allow me`
-   - **Action:** `Allow`
-   - **Selector:** `Emails` > your email address
-6. Save
-
-### Connect
-
-1. Open any browser on any device
-2. Go to `https://ssh.yourdomain.com`
-3. Enter your email > receive OTP > enter it
-4. A terminal appears > login with your Mac username and password
-
-```
-iPhone/Any Device                Cloudflare Edge              Your Mac
-    Browser          -->    ssh.yourdomain.com     -->    cloudflared
- (HTTPS request)          (Access auth + browser        (tunnel to
-                           SSH rendering)              localhost:22)
-```
+| Tailscale Devices | Termius Hosts | CF Zero Trust Dashboard |
+|:---:|:---:|:---:|
+| ![Devices](resources/05-tailscale-devices.jpeg) | ![Hosts](resources/06-termius-hosts.jpeg) | ![Dashboard](resources/07-cloudflare-dashboard.png) |
 
 ---
 
-## Method 2: Cloudflare WARP + Termius (Native SSH via Tunnel)
+## Going on Vacation? 30-Min Checklist
 
-Use Termius (or any SSH client) on your phone over cellular by routing traffic through Cloudflare WARP.
+- [ ] Tailscale on at least one machine + your phone
+- [ ] Addresses recorded (IPs + `.local` hostnames)
+- [ ] SSH config with ProxyJump
+- [ ] Services running in tmux
+- [ ] Termius configured on phone
+- [ ] Test the full flow before leaving
 
-### Zero Trust Dashboard Configuration
-
-#### 1. Enable Gateway Proxy
-
-> **This is the most commonly missed step!**
-
-1. Go to **Traffic policies > Traffic settings**
-2. Find **"Allow Secure Web Gateway to proxy traffic"**
-3. Turn it **ON**
-4. Enable **TCP**, **UDP**, and **ICMP**
-
-Without this, `is_gateway` stays `false` and WARP won't route private network traffic.
-
-#### 2. Configure Split Tunnels
-
-1. Go to **Team & Resources > Devices > Device profiles > Default**
-2. Find **Split Tunnels** (set to "Exclude IPs and domains")
-3. **Remove** `192.168.0.0/16` from the exclude list
-4. Save
-
-This tells WARP to route `192.168.x.x` traffic through the tunnel instead of bypassing it.
-
-#### 3. Add Gateway Network Policy
-
-1. Go to **Traffic policies > Firewall policies > Network** tab
-2. Add a policy:
-   - **Name:** `Allow Mac SSH`
-   - **Selector:** `Destination IP` > `in` > `YOUR_MAC_IP/32`
-   - **Action:** `Allow`
-
-See [Gateway Network Policy docs](docs/gateway-network-policy.md) for details.
-
-#### 4. Configure Device Enrollment
-
-1. Go to **Settings > WARP Client > Device enrollment permissions**
-2. Add a rule:
-   - **Selector:** `Emails` > your email address
-   - **Authentication:** One-time PIN
-
-### iPhone Setup
-
-1. Install **"1.1.1.1: Faster Internet"** from App Store
-2. Open the app > Settings > Account > **Login to Cloudflare Zero Trust**
-3. Team name: your Zero Trust organization name
-4. **Install the VPN profile** when prompted
-5. **Important:** Enter Zero Trust mode first, then connect WARP
-6. Verify WARP shows as connected
-
-### Connect with Termius
-
-- **Host:** your Mac's local IP (e.g., `192.168.1.216`)
-- **Port:** `22`
-- **Username:** your Mac username
-- **Password:** your Mac login password
-
-### WARP Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| `is_gateway: false` | Enable Gateway proxy in Traffic policies > Traffic settings |
-| Config not syncing to iOS | Log out of Zero Trust, delete app, reinstall, re-enroll |
-| "Could not establish connection" | Turn off other VPN apps (Tailscale, Shadowrocket, etc.) first |
-| Split tunnel not updating | Delete old device registrations in Team & Resources > Devices |
-| WARP keeps disconnecting | Enter Zero Trust mode first, then toggle connection on |
-| "Enrollment request is invalid" | Check device enrollment policy allows your email |
+> [Full pre-travel checklist](docs/pre-travel-checklist.md)
 
 ---
-
-## Method 3: Tailscale + Termius (Simplest for Mobile SSH)
-
-Tailscale creates a private network between your devices with zero configuration.
-
-### Setup
-
-1. **Mac:** Install Tailscale from App Store or `brew install tailscale`
-2. **iPhone:** Install Tailscale from App Store
-3. Sign in on both devices with the **same account**
-4. Note your Mac's Tailscale IP (e.g., `100.x.x.x`)
-
-```bash
-# Check your Tailscale IP
-tailscale ip
-```
-
-### Connect with Termius
-
-- **Host:** your Mac's Tailscale IP (e.g., `100.113.182.107`)
-- **Port:** `22`
-- **Username:** your Mac username
-- **Password:** your Mac login password
-
-> **Note:** Tailscale and WARP both use the iOS VPN slot. You can only use one at a time.
-
----
-
-## Method 4: Direct WiFi (Home Network Only)
-
-When on the same WiFi network, connect directly.
-
-- **Host:** your Mac's local IP (e.g., `192.168.1.216`)
-- **Port:** `22`
-- **Username:** your Mac username
-- **Password:** your Mac login password
-
----
-
-## Verification Commands
-
-```bash
-# Check tunnel status
-cloudflared tunnel list
-cloudflared tunnel info mac-remote
-
-# Check private network routes
-cloudflared tunnel route ip show
-
-# Check tunnel logs
-tail -f /Library/Logs/com.cloudflare.cloudflared.err.log
-
-# Check tunnel metrics (requests, connections)
-curl -s http://127.0.0.1:20241/metrics | grep -E "total_requests|concurrent"
-
-# Test SSH locally
-nc -z localhost 22 && echo "SSH is running"
-
-# Check Tailscale status
-tailscale status
-```
-
-## Lessons Learned
-
-- **Gateway proxy must be ON** for WARP private network routing to work
-- **`warp-routing: enabled`** must be in the cloudflared config.yml
-- **Browser rendering must be set to `SSH`** in the Access application (not "Disabled")
-- **Access application needs a public hostname** added or it won't save
-- iOS WARP config sync can be unreliable — deleting and reinstalling the app forces a fresh config
-- Multiple VPN apps on iOS can conflict — disable others before using WARP
-- Tailscale is the simplest path for native SSH clients on mobile
-- When debugging WARP, check `is_gateway` in the WARP client diagnostics — if `false`, Gateway proxy is off
-- Gateway Network firewall policy may be needed to explicitly allow private IP traffic
-- On iOS, only one VPN can be active at a time (WARP and Tailscale cannot coexist)
 
 ## Project Structure
 
 ```
-cloudflare-remote-ssh-guide/
-  README.md                          # Main guide (this file)
-  docs/
-    architecture.md                   # Architecture diagrams for all 4 methods
-    gateway-network-policy.md         # Gateway firewall policy setup
-    config-examples/
-      config.yml                      # cloudflared tunnel config template
-      com.cloudflare.cloudflared.plist # macOS LaunchDaemon template
+scripts/
+  01-setup-mac-ssh.sh           # Enable SSH
+  02-setup-cloudflared.sh       # Cloudflare Tunnel
+  02b-configure-zero-trust.sh   # Zero Trust dashboard
+  03-setup-tailscale.sh         # Tailscale
+  04-verify-connection.sh       # Verify all methods
+  05-setup-tmux-session.sh      # tmux + auto-tmux
+  06-setup-ssh-config.sh        # SSH config + ProxyJump
+
+docs/
+  method-1-wifi-direct.md       # WiFi direct setup details
+  method-2-cloudflare-browser-ssh.md  # Browser SSH setup details
+  method-3-cloudflare-warp.md   # WARP setup details
+  method-4-tailscale.md         # Tailscale setup details
+  ssh-config-proxyjump.md       # ProxyJump + SSH config guide
+  tmux-guide.md                 # tmux session persistence
+  mobile-ai-workflow.md         # Phone + AI workflow
+  pre-travel-checklist.md       # 30-min pre-travel prep
+  real-world-story.md           # The incident that started this
+  architecture.md               # Architecture diagrams
 ```
 
 ## License

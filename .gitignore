@@ -4,3 +4,7 @@
 *.pem
 *.key
 *.cred
+
+# Original unmasked screenshots (contain full IP addresses and credentials)
+resources/IMG_*
+resources/Screenshot*
