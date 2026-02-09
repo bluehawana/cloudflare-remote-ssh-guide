@@ -120,18 +120,18 @@ bash scripts/03-setup-tailscale.sh
 
 ```
 +------------------+        +-------------------+        +------------------+
-|   You            | WireGd |  Mac Studio       |  LAN   |    Mac Mini      |
-|   (anywhere)     +------->+  (Jump Host)      +------->+    (Target)      |
+|   You            | WireGd |  Jump Server      |  LAN   |    Main Server   |
+|   (anywhere)     +------->+  (VPN Connected)  +------->+  (No VPN)        |
 |                  |        |                   |        |                  |
 |  Termius /       |Tailscl |  Tailscale        | mDNS   |  No Tailscale    |
 |  Terminal        |  VPN   |  100.x.x.x       | .local |  192.168.1.x     |
 |                  |        |       |           |        |       |          |
-|  ssh mac-mini    |<-------+       v           |<-------+       v          |
+|  ssh main-server |<-------+       v           |<-------+       v          |
 |  (one command)   |        |  ProxyJump auto   |        |  SSH localhost:22 |
 +------------------+        +-------------------+        +------------------+
 ```
 
-**Can't install VPN on every machine?** Hop through one that has it. One command, SSH handles the jump automatically.
+**Have a machine you can't connect to directly?** Use another machine as a jump host. One command, SSH handles the hop automatically.
 
 ```bash
 bash scripts/06-setup-ssh-config.sh
@@ -139,21 +139,21 @@ bash scripts/06-setup-ssh-config.sh
 
 ```ssh-config
 # ~/.ssh/config
-Host mac-studio
-    HostName mac-studio          # Tailscale hostname
+Host jump-server
+    HostName jump-server              # Tailscale hostname
     User youruser
 
-Host mac-mini
-    HostName mac-mini.local      # Bonjour/mDNS
+Host main-server
+    HostName main-server.local        # Bonjour/mDNS
     User youruser
-    ProxyJump mac-studio         # Auto-hop
+    ProxyJump jump-server             # Auto-hop
 ```
 
 ```bash
-ssh mac-mini    # That's it. SSH jumps through mac-studio automatically.
+ssh main-server    # That's it. SSH jumps through jump-server automatically.
 ```
 
-> [Full setup guide](docs/ssh-config-proxyjump.md)
+> [Full setup guide](docs/ssh-config-proxyjump.md) -- *Not needed if you only have one machine to connect to.*
 
 ---
 
@@ -207,6 +207,7 @@ SSH from phone, let AI debug and fix. No typing on tiny keyboards.
 | File transfer (SCP) | Yes | | Yes | Yes | Yes |
 | Reaches machines w/o VPN | | | | | Yes |
 | Setup complexity | None | Medium | High | Low | Low |
+| Requires multiple machines | No | No | No | No | Yes |
 
 > **iOS note:** Tailscale and WARP both use the VPN slot. You can only use one at a time.
 
@@ -236,7 +237,7 @@ bash scripts/04-verify-connection.sh    # Checks all methods
 
 - [ ] Tailscale on at least one machine + your phone
 - [ ] Addresses recorded (IPs + `.local` hostnames)
-- [ ] SSH config with ProxyJump
+- [ ] SSH config with ProxyJump *(if multiple machines)*
 - [ ] Services running in tmux
 - [ ] Termius configured on phone
 - [ ] Test the full flow before leaving
@@ -262,7 +263,7 @@ docs/
   method-2-cloudflare-browser-ssh.md  # Browser SSH setup details
   method-3-cloudflare-warp.md   # WARP setup details
   method-4-tailscale.md         # Tailscale setup details
-  ssh-config-proxyjump.md       # ProxyJump + SSH config guide
+  ssh-config-proxyjump.md       # ProxyJump + SSH config guide (multi-machine setups)
   tmux-guide.md                 # tmux session persistence
   mobile-ai-workflow.md         # Phone + AI workflow
   pre-travel-checklist.md       # 30-min pre-travel prep

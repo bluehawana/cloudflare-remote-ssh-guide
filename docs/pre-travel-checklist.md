@@ -50,24 +50,24 @@ tailscale ip -4
 - [ ] Tailscale IPs recorded
 - [ ] Saved somewhere accessible from your phone (notes app, password manager)
 
-### 3. SSH Config with ProxyJump
+### 3. SSH Config with ProxyJump *(Skip if you only have one machine)*
 
-Set up `~/.ssh/config` so you can reach any machine with a single command:
+If you have multiple machines and only one has Tailscale, set up `~/.ssh/config` so you can reach any machine with a single command:
 
 ```ssh-config
-Host mac-studio
-    HostName mac-studio
+Host jump-server
+    HostName jump-server
     User youruser
 
-Host mac-mini
-    HostName mac-mini.local
+Host main-server
+    HostName main-server.local
     User youruser
-    ProxyJump mac-studio
+    ProxyJump jump-server
 ```
 
-- [ ] SSH config file created/updated
-- [ ] Jump host entries configured
-- [ ] Test: `ssh mac-mini` works (goes through jump host automatically)
+- [ ] SSH config file created/updated (if needed)
+- [ ] Jump host entries configured (if needed)
+- [ ] Test: `ssh main-server` works (goes through jump host automatically)
 
 See [SSH Config & ProxyJump Guide](ssh-config-proxyjump.md) for details.
 

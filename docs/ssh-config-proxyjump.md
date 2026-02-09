@@ -1,21 +1,30 @@
 # SSH Config & ProxyJump: Multi-Hop Remote Access
 
+> **Note for single-machine users:** If you only have one machine to connect to remotely, you don't need ProxyJump. Skip ahead to [Method 4 (Tailscale)](method-4-tailscale.md) or [Method 3 (Cloudflare WARP)](method-3-cloudflare-warp.md) for simpler direct connection options.
+
 > When you can't reach a machine directly, use another machine as a jump host. SSH's `ProxyJump` makes this seamless -- one command, automatic hop.
 
 ---
 
 ## The Problem
 
-You have two machines at home:
-- **Mac Studio** -- has Tailscale, reachable from anywhere
-- **Mac Mini** -- no Tailscale, only reachable on the local network
+You have two machines:
+- **Jump Server** -- Connected to Tailscale, reachable from anywhere
+- **Main Server** -- Not connected to Tailscale, only reachable from your local network
 
-From outside your home, you can't reach the Mac Mini directly. But you *can* reach the Mac Studio, which *can* reach the Mac Mini.
+From outside your home/office, you can't reach the Main Server directly. But you *can* reach the Jump Server, which *can* reach the Main Server.
 
 ```
-You (hotel/cafe)  ──X──>  Mac Mini (no Tailscale)
-You (hotel/cafe)  ────>   Mac Studio (Tailscale)  ────>  Mac Mini (LAN)
+You (remote)  ──X──>  Main Server (no Tailscale)
+You (remote)  ────>   Jump Server (Tailscale)  ────>  Main Server (LAN)
 ```
+
+**Example setup:**
+- Raspberry Pi 4 with Tailscale installed (Jump Server)
+- Ubuntu Server in your basement with no VPN capability (Main Server)
+- Need to access the Ubuntu Server while traveling
+
+You can extend this concept to chains of any length, but we'll stick to one jump for clarity.
 
 ---
 
@@ -24,11 +33,11 @@ You (hotel/cafe)  ────>   Mac Studio (Tailscale)  ────>  Mac Min
 Without configuration, you'd do this:
 
 ```bash
-# Step 1: SSH into the jump host
-ssh user@mac-studio
+# Step 1: SSH into the jump server
+ssh user@jump-server-ip-or-hostname
 
-# Step 2: From the jump host, SSH into the target
-ssh user@mac-mini.local
+# Step 2: From the jump server, SSH into the target
+ssh user@main-server.local-or-ip
 ```
 
 This works, but it's tedious. Every file transfer requires two hops manually. And you can't use tools like `scp` or VS Code Remote directly.
@@ -42,34 +51,34 @@ This works, but it's tedious. Every file transfer requires two hops manually. An
 Edit `~/.ssh/config`:
 
 ```ssh-config
-# Jump host -- reachable via Tailscale from anywhere
-Host mac-studio
-    HostName mac-studio          # Tailscale hostname
+# Jump host -- connected to Tailscale, reachable from anywhere
+Host jump-server
+    HostName jump-server              # Tailscale hostname or IP
     User youruser
 
-# Target machine -- reachable only via jump host
-Host mac-mini
-    HostName my-mac-mini.local    # Bonjour/mDNS hostname
+# Target machine -- NOT on Tailscale, only reachable via jump host
+Host main-server
+    HostName main-server.local        # Bonjour/mDNS or IP address
     User youruser
-    ProxyJump mac-studio               # Automatically hop through mac-studio
+    ProxyJump jump-server             # Automatically hop through jump-server
 ```
 
 Now:
 
 ```bash
-ssh mac-mini    # One command -- SSH handles the hop automatically
+ssh main-server    # One command -- SSH handles the hop automatically
 ```
 
-Behind the scenes, SSH connects to `mac-studio` first, then tunnels through to `mac-mini`. You don't see the intermediate step.
+Behind the scenes, SSH connects to `jump-server` first, then tunnels through to `main-server`. You don't see the intermediate step.
 
 ### File Transfer Also Works
 
 ```bash
-# Copy a file to mac-mini (automatically goes through mac-studio)
-scp myfile.txt mac-mini:~/
+# Copy a file to main-server (automatically goes through jump-server)
+scp myfile.txt main-server:~/
 
 # Or use rsync
-rsync -avz ./project/ mac-mini:~/project/
+rsync -avz ./project/ main-server:~/project/
 ```
 
 ---
@@ -86,14 +95,14 @@ To find your Mac's hostname:
 
 ```bash
 scutil --get LocalHostName
-# Example output: my-mac-mini
-# So the .local address is: my-mac-mini.local
+# Example output: my-main-server
+# So the .local address is: my-main-server.local
 ```
 
 This means you don't need to remember IP addresses on your local network:
 
 ```bash
-ssh user@my-mac-mini.local    # Works if both machines are on the same LAN
+ssh user@my-main-server.local    # Works if both machines are on the same LAN
 ```
 
 ### Keep a Record of Both
@@ -102,8 +111,8 @@ ssh user@my-mac-mini.local    # Works if both machines are on the same LAN
 
 | Machine | .local Hostname | IP Address | Tailscale IP |
 |---------|----------------|------------|-------------|
-| Mac Studio | mac-studio.local | 192.168.1.x | 100.x.x.x |
-| Mac Mini | my-mac-mini.local | 192.168.1.x | -- |
+| Jump Server (RPi) | rpi-jump.local | 192.168.1.10 | 100.x.x.x |
+| Main Server (Ubuntu) | ubuntu-server.local | 192.168.1.20 | -- |
 
 Find your IP:
 - **macOS:** Hold Option + click WiFi icon in menu bar, or `ipconfig getifaddr en0`
@@ -132,8 +141,8 @@ Password-based SSH works but gets old fast, especially through jump hosts. Set u
 ssh-keygen -t ed25519
 
 # Copy your public key to the remote machine
-ssh-copy-id mac-studio
-ssh-copy-id mac-mini    # Run this while on the same LAN, or after ProxyJump is configured
+ssh-copy-id jump-server  # Connects directly via Tailscale
+ssh-copy-id main-server  # Run this while on the same LAN, or after ProxyJump is configured
 ```
 
 ### Keep-Alive to Prevent Drops
@@ -149,10 +158,10 @@ This sends a keepalive packet every 60 seconds. If 3 consecutive keepalives fail
 ### Compression for Slow Connections
 
 ```ssh-config
-Host mac-mini
-    HostName my-mac-mini.local
+Host main-server
+    HostName your-main-server.local
     User youruser
-    ProxyJump mac-studio
+    ProxyJump jump-server
     Compression yes    # Helpful on slow hotel WiFi
 ```
 
@@ -170,21 +179,21 @@ Host *
     IdentityFile ~/.ssh/id_ed25519
 
 # Direct access via Tailscale
-Host mac-studio
-    HostName mac-studio
+Host jump-server
+    HostName jump-server.tailscale.net
     User youruser
 
 # Access via jump host
-Host mac-mini
-    HostName your-mac-mini.local
+Host main-server
+    HostName your-main-server.local
     User youruser
-    ProxyJump mac-studio
+    ProxyJump jump-server
 
-# Alternative: access mac-mini by IP (fallback if .local fails)
-Host mac-mini-ip
-    HostName 192.168.1.x
+# Alternative: access main-server by IP (fallback if .local fails)
+Host main-server-ip
+    HostName 192.168.1.20
     User youruser
-    ProxyJump mac-studio
+    ProxyJump jump-server
 ```
 
 ---
@@ -194,11 +203,11 @@ Host mac-mini-ip
 | Issue | Solution |
 |-------|---------|
 | `.local` hostname not resolving | Use IP address instead; check that both machines are on the same network |
-| `ProxyJump` not working | Verify the jump host is reachable first: `ssh mac-studio` |
-| Permission denied on jump | Check that your SSH key is on both the jump host AND the target |
-| Connection timeout through jump | The target machine may have SSH disabled; check `Remote Login` in System Settings |
+| `ProxyJump` not working | Verify the jump server is reachable first: `ssh jump-server` |
+| Permission denied on jump | Check that your SSH key is on both the jump server AND the target |
+| Connection timeout through jump | The target machine may have SSH disabled; check SSH service status |
 | "Host key verification failed" | The target's IP changed; run `ssh-keygen -R <hostname>` to clear old key |
 
 ---
 
-*ProxyJump turns a "can't reach it" into "one command." Set it up once, and every future emergency is just `ssh mac-mini` away.*
+*ProxyJump turns a "can't reach it from anywhere" into "just `ssh main-server` from anywhere." Set it up once, and every future emergency is just one command away.*
