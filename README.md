@@ -2,6 +2,8 @@
 
 Four ways to SSH into your Mac from anywhere — from a browser terminal to native SSH clients on your phone.
 
+> New Year New Project #6 | Built on Mac Mini M4 | [Architecture Diagrams](docs/architecture.md) | [Config Examples](docs/config-examples/)
+
 ## Connection Methods Overview
 
 | Method | App | Network | Setup Complexity |
@@ -178,7 +180,17 @@ Without this, `is_gateway` stays `false` and WARP won't route private network tr
 
 This tells WARP to route `192.168.x.x` traffic through the tunnel instead of bypassing it.
 
-#### 3. Configure Device Enrollment
+#### 3. Add Gateway Network Policy
+
+1. Go to **Traffic policies > Firewall policies > Network** tab
+2. Add a policy:
+   - **Name:** `Allow Mac SSH`
+   - **Selector:** `Destination IP` > `in` > `YOUR_MAC_IP/32`
+   - **Action:** `Allow`
+
+See [Gateway Network Policy docs](docs/gateway-network-policy.md) for details.
+
+#### 4. Configure Device Enrollment
 
 1. Go to **Settings > WARP Client > Device enrollment permissions**
 2. Add a rule:
@@ -284,3 +296,23 @@ tailscale status
 - iOS WARP config sync can be unreliable — deleting and reinstalling the app forces a fresh config
 - Multiple VPN apps on iOS can conflict — disable others before using WARP
 - Tailscale is the simplest path for native SSH clients on mobile
+- When debugging WARP, check `is_gateway` in the WARP client diagnostics — if `false`, Gateway proxy is off
+- Gateway Network firewall policy may be needed to explicitly allow private IP traffic
+- On iOS, only one VPN can be active at a time (WARP and Tailscale cannot coexist)
+
+## Project Structure
+
+```
+cloudflare-remote-ssh-guide/
+  README.md                          # Main guide (this file)
+  docs/
+    architecture.md                   # Architecture diagrams for all 4 methods
+    gateway-network-policy.md         # Gateway firewall policy setup
+    config-examples/
+      config.yml                      # cloudflared tunnel config template
+      com.cloudflare.cloudflared.plist # macOS LaunchDaemon template
+```
+
+## License
+
+MIT

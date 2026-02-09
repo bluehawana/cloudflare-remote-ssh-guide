@@ -1,0 +1,21 @@
+# Cloudflare Tunnel Configuration
+# Place this file at ~/.cloudflared/config.yml
+
+# Your tunnel ID (from `cloudflared tunnel create`)
+tunnel: <YOUR_TUNNEL_ID>
+
+# Path to the tunnel credentials JSON file
+credentials-file: /Users/<YOUR_USERNAME>/.cloudflared/<YOUR_TUNNEL_ID>.json
+
+# Enable WARP routing for private network access (Method 2)
+warp-routing:
+  enabled: true
+
+# Ingress rules - define how traffic is routed
+ingress:
+  # Route ssh.yourdomain.com to local SSH server
+  - hostname: ssh.yourdomain.com
+    service: ssh://localhost:22
+
+  # Catch-all rule (required) - returns 404 for unmatched requests
+  - service: http_status:404
