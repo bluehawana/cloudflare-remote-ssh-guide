@@ -228,7 +228,7 @@ bash scripts/04-verify-connection.sh    # Checks all methods
 
 | Tailscale Devices | Termius Hosts | CF Zero Trust Dashboard |
 |:---:|:---:|:---:|
-| ![Devices](resources/05-tailscale-devices.jpeg) | ![Hosts](resources/06-termius-hosts.jpeg) | ![Dashboard](resources/07-cloudflare-dashboard.png) |
+| ![Devices](resources/04-tailscale-devices.jpeg) | ![Hosts](resources/05-termius-hosts.jpeg) | ![Dashboard](resources/06-cloudflare-dashboard.png) |
 
 ---
 
@@ -268,6 +268,14 @@ docs/
   pre-travel-checklist.md       # 30-min pre-travel prep
   real-world-story.md           # The incident that started this
   architecture.md               # Architecture diagrams
+
+resources/
+  01-wifi-direct-ssh.jpeg       # Screenshot: WiFi direct SSH
+  02-cellular-5g-warp-ssh.jpeg  # Screenshot: 5G cellular via WARP
+  03-tailscale-ssh.jpeg         # Screenshot: Tailscale SSH
+  04-tailscale-devices.jpeg     # Screenshot: Tailscale device list
+  05-termius-hosts.jpeg         # Screenshot: Termius host config
+  06-cloudflare-dashboard.png   # Screenshot: CF Zero Trust settings
 ```
 
 ## License

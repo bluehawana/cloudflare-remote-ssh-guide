@@ -49,7 +49,7 @@ Or: hold **Option** + click the WiFi icon in the menu bar.
 | Username | your Mac username |
 | Password | your Mac login password |
 
-![Termius Hosts](../resources/06-termius-hosts.jpeg)
+![Termius Hosts](../resources/05-termius-hosts.jpeg)
 *Termius host configuration -- one entry per connection method.*
 
 ## Result

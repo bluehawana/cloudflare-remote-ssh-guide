@@ -56,9 +56,9 @@ https://github.com/bluehawana/homeserver-ssh-anywhere
 1. `resources/01-wifi-direct-ssh.jpeg` -- WiFi direct connection (baseline)
 2. `resources/02-cellular-5g-warp-ssh.jpeg` -- 5G cellular via Cloudflare WARP (notice 5G icon)
 3. `resources/03-tailscale-ssh.jpeg` -- Tailscale mesh VPN connection
-4. `resources/05-tailscale-devices.jpeg` -- Tailscale device list (all devices on private network)
-5. `resources/06-termius-hosts.jpeg` -- Termius SSH host configuration
-6. `resources/07-cloudflare-dashboard.png` -- Cloudflare Zero Trust dashboard settings
+4. `resources/04-tailscale-devices.jpeg` -- Tailscale device list (all devices on private network)
+5. `resources/05-termius-hosts.jpeg` -- Termius SSH host configuration
+6. `resources/06-cloudflare-dashboard.png` -- Cloudflare Zero Trust dashboard settings
 
 Caption for carousel: "6 methods to SSH home + the resilience layers that saved my vacation. Cloudflare Zero Trust, Tailscale, ProxyJump, tmux, and AI-powered mobile debugging."
 

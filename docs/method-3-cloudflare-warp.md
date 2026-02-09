@@ -44,7 +44,7 @@
 - REMOVE `192.168.0.0/16` from the exclude list
 - *This tells WARP to route your home network IPs through the tunnel*
 
-![Cloudflare Dashboard](../resources/07-cloudflare-dashboard.png)
+![Cloudflare Dashboard](../resources/06-cloudflare-dashboard.png)
 *Cloudflare Zero Trust device profile settings -- Split Tunnels configuration.*
 
 #### 3. Add Gateway Network Policy

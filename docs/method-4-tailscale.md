@@ -38,7 +38,7 @@ tailscale ip
 2. Sign in with the **same account**
 3. Both devices appear in your tailnet
 
-![Tailscale Devices](../resources/05-tailscale-devices.jpeg)
+![Tailscale Devices](../resources/04-tailscale-devices.jpeg)
 *Tailscale device list -- all your devices on one private network, each with a stable `100.x.x.x` IP.*
 
 ## Connect with Termius
